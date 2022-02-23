@@ -21,7 +21,7 @@ Sections:
 - [Recording ip addresses by application group](#recording-ip-addresses-by-application-group)
 - [Monitoring application specific traffic](#monitoring-application-specific-traffic)
 - [Domain name based allowlist firewall rules](#domain-name-based-allowlist-firewall-rules)
-- [Config file and Setup tool](#config-file-and-setup-tool)
+- [Config file and Generator tool](#config-file-and-generator-tool)
 
 ## Prerequisites
 - `nftables`:  syntax / functionality varies from one version to another.
@@ -315,8 +315,8 @@ echo 'Acquire::EnableSrvRecords "false";' > /etc/apt/apt.conf.d/00noSRVqueries
 
 - dnsmasq also offers the `--connmark-allowlist` option.  You could also use this to refuse DNS queries based on the ct mark, but I really don't see the point without Ubus:  `--connmark-allowlist` does not actually prevent connections, so any app could still connect to any IP address, and use other DNS servers (like vscode does).  Even if you were to limit connections only to port 443 (https), apps could still direct connect to any IP, and even use private or public DoH (DNS over https) servers to resolve all (like firefox can do, and is considering doing by default).
 
-## Config file and Setup tool
+## Config file and Generator tool
 
-You can perform the steps mentioned above manually, and doing so is a good exercise to understand the process and offers the most control and flexibility.  But since the `galaf` tool would require a configuration file to specify application group command lines, that file can also be used to help setup our application groups, nftables defines, sets and rules, and the dnsmasq nftset entries...
+You can perform the steps mentioned above manually, and doing so is a good exercise to understand the process and offers the most control and flexibility.  But since the `galaf` tool would require a configuration file to specify application group command lines, that file can also be used to help generate our application groups, nftables defines, sets and rules, and the dnsmasq nftset option files...
 
-see in [examples](examples): `galaf_conf.json` and `galaf_config`
+see in [examples](examples): `galaf.json` and `galaf_generate`
