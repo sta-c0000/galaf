@@ -5,7 +5,7 @@ Assumes adequate GNU/Linux and nftables technical proficiency.  Refer to the man
 There are many ways to accomplish the same thing with GNU/Linux; what's presented here is one approach for a personal workstation.
 This is not a complete production ready solution, an attempt has been made to keep it as simple as possible for clarity.  As it is, some of the examples only implement security through obscurity; it is left up to the reader to customize and complete the configuration and tools.
 
-Use of the [examples](examples/README.md) is AT YOUR OWN RISK, best to always understand before doing.
+Use of the [examples](examples) is AT YOUR OWN RISK, best to always understand before doing.
 
 The reference platform used is a standard Debian 11 bullseye desktop install.
 
@@ -101,7 +101,7 @@ gid=$(getent group traceroute | cut -d: -f3)
 
 To grant application group access and firewall permissions, we'll create a simple tool called `galaf` (**group allow-list application firewall**).  This gid tool will control all access to application groups and allow users to launch specific applications with specific firewall permissions.  Any time a user wants to run an application that requires net access, they issue the command `galaf appgroupname` and the tool will grant application group access (using `setregid`) and `execv` the specific binary associated with that application group.  This also allows root to enforce how the binary is launched: directly, using a systemd unit, or using a sandbox like firejail.  We'll put our tool in `/usr/local/bin` and give it `cap_setgid` capabilities.  On our workstation, the idea is not that we do not trust ourselves, the user; it's that if software are aware of a way to grant themselves network access, some will.  Note that if the target execv binary can also execv, spawn shells, or run scripts, they will also inherit the same firewall permissions; that may not be an issue if permissions are strictly limited, but try to not grant such binaries full net access, or, at least, sandbox them.
 
-see in [examples](examples/README.md): `galaf.c` and `galaf-test.c`
+see in [examples](examples): `galaf.c` and `galaf-test.c`
 
 ## Application connection tracking
 
@@ -167,7 +167,7 @@ table inet mangle {
 
 To accomplish this we can create a very simple eBPF program to pack the gid and uid into the socket mark when IP sockets are created.  The socket mark will be transferred to the packet mark, and the packet mark can then be transferred to the conntrack mark using nftables.
 
-See: `socket_mark_giduid.bpf.c` in the [examples](examples/README.md) for information on how to compile, manually load and attach this eBPF program (confirm your cgroup2 root path: `mount | grep cgroup2`).  Also provided is a systemd service file to auto load the eBPF.
+See: `socket_mark_giduid.bpf.c` in the [examples](examples) for information on how to compile, manually load and attach this eBPF program (confirm your cgroup2 root path: `mount | grep cgroup2`).  Also provided is a systemd service file to auto load the eBPF.
 
 **NOTE**: this eBPF will NOT work properly if your system is using cgroup v1 or v1+v2 hybrid mode while using `net_cls,net_prio`!  Best to use cgroup v2 only (`systemd.unified_cgroup_hierarchy=1`), which should be the default in Debian 11 bullseye and higher.
 
@@ -223,7 +223,7 @@ nftables can then output these statistics in JSON format which can be processed 
 | username/traceroute                         |       34  |      2 kB |
 | username/qalc                               |      145  |    8.3 kB |
 
-see in [examples](examples/README.md): `nftables.conf` and `galaf_stats`
+see in [examples](examples): `nftables.conf` and `galaf_stats`
 
 ## Recording ip addresses by application group
 nftables can also be used to record ip addresses specific application groups connect to, or attempt to connect to:
@@ -257,7 +257,7 @@ table inet record {
 
 Now that all network traffic is tagged/marked with the uid and gid of our appgroups, we can easily monitor user/application specific traffic (inbound and outbound) using tcpdump...
 
-see in [examples](examples/README.md): `galag_tcpdump`
+see in [examples](examples): `galag_tcpdump`
 
 For example, to see only DNS query responses for a specific appgroup:
 ```
@@ -319,4 +319,4 @@ echo 'Acquire::EnableSrvRecords "false";' > /etc/apt/apt.conf.d/00noSRVqueries
 
 You can perform the steps mentioned above manually, and doing so is a good exercise to understand the process and offers the most control and flexibility.  But since the `galaf` tool would require a configuration file to specify application group command lines, that file can also be used to help setup our application groups, nftables defines, sets and rules, and the dnsmasq nftset entries...
 
-see in [examples](examples/README.md): `galaf_conf.json` and `galaf_config`
+see in [examples](examples): `galaf_conf.json` and `galaf_config`
