@@ -11,7 +11,7 @@ The reference platform used is a standard Debian 11 bullseye desktop install.
 
 Sections:
 - [Prerequisites](#prerequisites)
-- [Why?](#why?)
+- [Why?](#why)
 - [Allowlist application firewall](#allowlist-application-firewall)
 - [Creating application groups](#creating-application-groups)
 - [The application group gatekeeper](#the-application-group-gatekeeper)
@@ -211,7 +211,6 @@ table inet stats {
 
 nftables can then output these statistics in JSON format which can be processed and presented many different ways; a basic example of the kind of results this can provide:
 
-<style>th, td {border: 2px solid;}</style>
 ╭─────┤ Set: pre-filter-out ├─────╮
 |                user / group                 |  packets  |    bytes  |
 |---------------------------------------------|----------:|----------:|
