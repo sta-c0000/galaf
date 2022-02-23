@@ -1,0 +1,86 @@
+#!/usr/bin/python3
+'''
+tcpdump specific conntrack mark network traffic
+ex.: galaf_tcpdump thunderbird # application group
+ex.: galaf_tcpdump 0x03e803e8 -n # gid 1000 and uid 1000 (if using eBPF)
+ex.: galaf_tcpdump 0x0 -nv # unmarked packets
+ex.: galaf_tcpdump systemd-timesync -nvvv # NTP user; typically every half hour
+ex.: galaf_tcpdump appgrouname -Klnvv | grep "q: A" # only DNS query responses
+'''
+import grp
+import pwd
+from subprocess import run
+from sys import argv
+
+from nftables import Nftables # apt install python3-nftables
+
+def usage():
+    print(f'usage: {argv[0]} 0xhex_ct_mark [tcpdump_options ...]')
+    print(f'       {argv[0]} appgroupname [tcpdump_options ...]')
+    print(f'       {argv[0]} username [tcpdump_options ...]')
+    exit(1)
+
+if len(argv) < 2:
+    usage()
+
+name = argv[1]
+try:
+    mark = int(name, 16)
+except ValueError:
+    mark = None
+    gid_min, gid_max = 30000, 59999 # our application group range
+    try:
+        gid = grp.getgrnam(name).gr_gid
+        if not gid_min < gid < gid_max:
+            raise KeyError
+    except KeyError:
+        gid = None
+        try:
+            uid = pwd.getpwnam(name).pw_uid
+        except KeyError:
+            print(f'ERROR: "{name}" is not a hex value, appgroup or user name\n')
+            usage()
+
+nft = Nftables()
+tcpdump_table = '''
+table inet tcpdump {
+    # priority: -10 = pre-filter, 10 = post-filter
+    chain input {
+        type filter hook input priority -10;
+        #iif lo accept comment "ignore loopback"
+        ct mark CTMARK log group LOGGROUP
+    }
+    chain output {
+        type filter hook output priority -10;
+        #oif lo accept comment "ignore loopback"
+        ct mark CTMARK log group LOGGROUP
+    }
+}
+'''
+table_name = tcpdump_table.split('\n')[1][:-2] # second line less bracket!
+
+if mark is not None:
+    ctmark = hex(mark)
+    loggroup = 60000
+elif gid:
+    ctmark = f'& 0xFFFF0000 == {gid<<16}'
+    loggroup = gid
+else:
+    if uid == 0: uid = 1 # root/daemon as opposed to unmarked
+    ctmark = f'& 0xFFFF == {uid}'
+    loggroup = uid
+tcpdump_table = tcpdump_table.replace('CTMARK', ctmark).replace('LOGGROUP', str(loggroup))
+
+print(f'Creating nft {table_name}')
+rc, output, error = nft.cmd(tcpdump_table)
+if rc:
+    print(output + '\n' + error)
+    exit(1)
+try:
+    run(['nft', 'list', *table_name.split()])
+    run(['tcpdump', '-i', f'nflog:{loggroup}'] + argv[2:]) # apt install tcpdump
+except KeyboardInterrupt:
+    pass
+finally:
+    print(f'Deleting nft {table_name}')
+    nft.cmd(f'delete {table_name}')

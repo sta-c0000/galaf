@@ -1,0 +1,246 @@
+#!/usr/bin/python3
+'''
+Utility to generate galaf groups, nftables include files and dnsmasq nftset options
+'''
+
+import argparse
+import grp
+import json
+from os import path as os_path
+from pathlib import Path
+import pwd
+from subprocess import run
+
+def gid_range_ok():
+    ''' Check if range is allowed on system '''
+    if gid_max < gid_min:
+        return False
+    with open('/etc/login.defs', 'r') as f:
+        for line in f:
+            if line.startswith('GID_MIN'):
+                if gid_min < int(line.split()[1]):
+                    return False
+            if line.startswith('GID_MAX'):
+                if gid_max > int(line.split()[1]):
+                    return False
+    return True # assume ok
+
+def groupadd(name):
+    ''' Add new group within gid range '''
+    cmd = [
+        '/usr/sbin/groupadd',
+        '-K', f'GID_MIN={gid_min}',
+        '-K', f'GID_MAX={gid_max}',
+        name
+    ]
+    result = run(cmd)
+    if result.returncode:
+        return False
+    return True # assume success
+
+def confirm(q):
+    return input(q).lower() in ('y', 'yes', 't', 'true', '1')
+
+def groupdel(name):
+    ''' Delete group and optionally chown group owned files to :nogroup '''
+    if confirm(f'Delete group "{name}"? '):
+        if confirm(f'chown all ":{name}" owned files on system to ":nogroup" ? '):
+            cmd = [
+                'find', '/', '-xdev', '!', '-readable', '-prune', '-o',
+                '-group', name, '-exec',
+                'chown', '-v', ':nogroup', '{}', ';'
+            ]
+            result = run(cmd)
+            if result.returncode:
+                return False
+        cmd = [ 'groupdel', name ]
+        result = run(cmd)
+        if result.returncode:
+            return False
+    return True
+
+def set_or_singleton(l):
+    return f'{{ {", ".join(l)} }}' if len(l) > 1 else str(l[0])
+
+def process_ugr(type_id, name, ugid, params):
+    ''' Process user/group rules '''
+    if type_id == 'gid':
+        define = f'define {name} = {hex(ugid<<16)}'
+    else:
+        define = f'define {name} = {ugid}'
+    define_ugids.append(define)
+    if not params:
+        return
+
+    domains = params.get('domains', defaults.get('domains', None))
+    families = params.get('families', defaults.get('families', [4]))
+    rule = params.get('rule', defaults.get('rule', None))
+    rule6 = params.get('rule6', defaults.get('rule6', None))
+    if not domains and rule == rule6 == None:
+        return
+    rule = rule + ' ' if rule else ''
+    rule6 = rule6 + ' ' if rule6 else ''
+    to_rule6s = rules if inet else rule6s
+
+    rule_start = f'\t\tsk{type_id} {name} '
+    rule_end = f'ct mark set ${name} accept' if args.nogandu else 'accept'
+
+    if domains:
+        if isinstance(domains, list):
+            nftset = 'nftset=/' + '/'.join(domains)
+            if 4 in families:
+                nftset += f'/4#{"inet" if inet else "ip"}#{table}#{name}_4'
+                define_sets.append(f'\tset {name}_4 {{ type ipv4_addr; }}')
+            if 6 in families:
+                nftset += f'/6#{"inet" if inet else "ip6"}#{table}#{name}_6'
+                to_set = define_sets if inet else define6_sets
+                to_set.append(f'\tset {name}_6 {{ type ipv6_addr; }}')
+            nftsets.append(nftset)
+            setname = name
+        else:
+            setname = domains
+        if 4 in families:
+            rules.append(rule_start + f'ip daddr @{setname}_4 ' + rule + rule_end)
+        if 6 in families:
+            to_rule6s.append(rule_start + f'ip6 daddr @{setname}_6 ' + rule6 + rule_end)
+    else:
+        rules.append(rule_start + rule + rule_end)
+        if rule6:
+            to_rule6s.append(rule_start + rule6 + rule_end)
+
+def write_list(l, filename):
+    if l:
+        with open(filename, 'w') as f:
+            f.write('\n'.join(l) + '\n')
+        print(f'Generated: {filename}')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        'config', nargs='?', type = Path,
+        default = Path('/usr/local/etc/galaf/galaf.json'),
+        help = 'Path to JSON configuration file'
+    )
+    parser.add_argument(
+        '-i', '--nftincpath', type = Path,
+        default = Path('/usr/local/etc/galaf'),
+        help = 'Path to nftables includes ouput directory'
+    )
+    parser.add_argument(
+        '-s', '--nftsets', type = Path,
+        default = Path('/etc/NetworkManager/dnsmasq.d/40-nftsets.conf'),
+        help = 'Path to dnsmasq nftsets configuration output file'
+    )
+    parser.add_argument(
+        '-n', '--nogandu', action='store_true',
+        help = 'use galaf gid or uid, not both; and set ct mark (no eBPF!)'
+    )
+
+    args = parser.parse_args()
+
+    if not args.nftincpath.is_dir():
+        print(f'ERROR: {args.nftincpath} must be a directory.')
+        exit(1)
+
+    if not args.nftsets.parent.is_dir() or args.nftsets.is_dir():
+        print(f'ERROR: {args.nftsets} must be a filename.')
+        exit(1)
+
+    if not args.config.is_file():
+        print(f'ERROR: {args.config} is not a file.\n')
+        parser.print_help()
+        exit(1)
+
+    with open(args.config, 'r') as f:
+        try:
+            gcj = json.load(f)
+        except json.decoder.JSONDecodeError as e:
+            print('ERROR: problem with the JSON configuration file.\n')
+            print(e)
+            exit(1)
+
+    config = gcj['config']
+    gid_min, gid_max = config['gid_range']
+    inet = config.get('inet', True)
+    table = config.get('table', "filter")
+
+    if not gid_range_ok():
+        print('ERROR: gid_range outside allowable according to /etc/login.defs')
+        print(f'config -> gid_range = {gid_min}-{gid_max}')
+        exit(1)
+
+    range_groups_set = {
+        g.gr_name for g in grp.getgrall()
+        if g.gr_gid >= gid_min and g.gr_gid <= gid_max
+    }
+
+    galaf_groups = gcj.get('groups', None)
+    galaf_groups_set = set(galaf_groups)
+    not_galaf_groups = range_groups_set - galaf_groups_set
+    new_galaf_groups = galaf_groups_set - range_groups_set
+
+    if range_groups_set and range_groups_set.isdisjoint(galaf_groups_set):
+        print(f'WARNING: groups already in specified range ({gid_min}-{gid_max}):\n')
+        print(', '.join(sorted(not_galaf_groups)))
+        if not confirm('\nContinue anyways? '):
+            exit()
+
+    if not_galaf_groups:
+        print('The following groups are not defined in the config file:\n')
+        print(', '.join(sorted(not_galaf_groups)))
+        if confirm('\nWould you like to delete them? '):
+            if not all(map(groupdel, sorted(not_galaf_groups))):
+                exit(1)
+
+    if new_galaf_groups:
+        print('The following groups do not yet exist:\n')
+        print(', '.join(sorted(new_galaf_groups)))
+        if confirm('\nCreate all of the above groups? '):
+            if not all(map(groupadd, new_galaf_groups)):
+                exit(1)
+
+    defaults = config["defaults"]
+
+    define_ugids = []
+    define_sets = []
+    define6_sets = []
+    rules = []
+    rule6s = []
+    nftsets = []
+
+    galaf_users = gcj.get('users', None)
+    if galaf_users:
+        users = { u.pw_name:u.pw_uid for u in pwd.getpwall() }
+        for name, params in galaf_users.items():
+            uid = users.get(name, None)
+            if uid == 0: uid = 1 # 1 = root or daemon! (vs "unmarked")
+            if not uid:
+                print(f'WARNING: user "{name}" does not exist!  Using: "nobody"')
+                uid = pwd.getpwnam('nobody').pw_uid
+            process_ugr('uid', name, uid, params)
+
+    if galaf_groups:
+        range_groups = {
+            g.gr_name:g.gr_gid for g in grp.getgrall()
+            if g.gr_gid >= gid_min and g.gr_gid <= gid_max
+        }
+        for name, params in galaf_groups.items():
+            gid = range_groups.get(name, None)
+            if not gid:
+                print(f'WARNING: group "{name}" does not exist!  Using: "nogroup"')
+                gid = grp.getgrnam('nogroup').gr_gid
+            process_ugr('gid', name, gid, params)
+
+    # nftables
+    write_list(define_ugids, os_path.join(args.nftincpath, 'define_giduids.conf'))
+    write_list(define_sets,  os_path.join(args.nftincpath, 'define_sets.conf'))
+    write_list(define6_sets, os_path.join(args.nftincpath, 'define6_sets.conf'))
+    write_list(rules,        os_path.join(args.nftincpath, 'rules.conf'))
+    write_list(rule6s,       os_path.join(args.nftincpath, 'rule6s.conf'))
+
+    # dnsmasq
+    write_list(nftsets,      args.nftsets)
+
+    print('Done.')

@@ -1,0 +1,19 @@
+# systemd service file: /usr/local/lib/systemd/system/
+[Unit]
+Description=Load and attach so_mark_giduid eBPF
+Wants=network-pre.target
+Before=network-pre.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ProtectSystem=full
+ProtectHome=true
+ExecStart=bpftool prog load /usr/local/etc/galaf/so_mark_giduid.bpf.o /sys/fs/bpf/so_mark_giduid type cgroup/sock
+ExecStart=bpftool cgroup attach /sys/fs/cgroup/ sock_create pinned /sys/fs/bpf/so_mark_giduid multi
+ExecStop=bpftool cgroup detach /sys/fs/cgroup/ sock_create pinned /sys/fs/bpf/so_mark_giduid
+ExecStop=rm /sys/fs/bpf/so_mark_giduid
+
+[Install]
+WantedBy=sysinit.target

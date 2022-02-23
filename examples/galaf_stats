@@ -1,0 +1,75 @@
+#!/usr/bin/python3
+'''
+Print nftable sets, and counter stats
+'''
+import grp
+import json
+import pwd
+
+from nftables import Nftables # apt install python3-nftables
+
+def size_in_si(num, bytes=False):
+    divisor = 1024.0 if bytes else 1000.0
+    tag = 'B' if bytes else ''
+    for unit in ['','k','M','G','T','P','E','Z']:
+        if abs(num) < divisor:
+            return f'{num:3.1f}'.rstrip('0').rstrip('.') + ' ' + unit + tag
+        num /= divisor
+    return f'{num:.1f} Y{tag}'
+
+nft = Nftables()
+nft.set_json_output(True)
+
+rc, output, error = nft.cmd(f'list sets')
+if rc:
+    print('ERROR: nft.cmd\n' + error)
+    exit(rc)
+nftj = json.loads(output)['nftables']
+
+if not nftj:
+    print('ERROR: `nft list sets` returned nothing (not root or no sets?)')
+    exit(1)
+
+if 'metainfo' in nftj[0] and nftj.pop(0)['metainfo']['json_schema_version'] != 1:
+    print('WARNING: json_schema_version different than expected.')
+
+for nftset in nftj:
+    nftset = nftset['set']
+    print(f'╭{"┤ Set: "+nftset["name"]+" ├":─^71}╮')
+    set_type = nftset['type']
+    if 'elem' not in nftset:
+        print('  -- empty --\n')
+        continue
+    if isinstance(nftset['elem'][0], dict):
+        elems = [e['elem'] for e in nftset['elem']]
+        if 'counter' not in elems[0]:
+            print('  -- not handled --\n')
+            continue
+        val_counters = ((e['val'],e['counter']) for e in elems)
+        val_name = 'user / group' if set_type == 'mark' else 'ip addr'
+        print(f'│{val_name:^47}│{"packets":^11}│{"bytes":^11}│')
+        print(f'├{"":─^47}┼{"":─^11}┼{"":─^11}┤')
+
+        if set_type == 'mark':
+            for mark, counter in val_counters:
+                uid = mark & 0xFFFF
+                gid = mark>>16
+                if mark == 0:
+                    name = 'unmarked'
+                else:
+                    if uid == 1:
+                        user = 'root|daemon'
+                    else:
+                        user = pwd.getpwuid(uid).pw_name
+                    group = grp.getgrgid(gid).gr_name
+                    name = f'{user}/{group}'
+                pt, bt = counter['packets'], counter['bytes']
+                print(f'│ {name:45} │{size_in_si(pt):>10} │{size_in_si(bt,True):>10} │')
+
+        if set_type == 'ipv4_addr' or set_type == 'ipv6_addr':
+            for ipaddr, counter in val_counters:
+                pt, bt = counter['packets'], counter['bytes']
+                print(f'│ {ipaddr:45} │{size_in_si(pt):>10} │{size_in_si(bt,True):>10} │')
+    else:
+        print(nftset['elem'])
+    print(f'╰{"":─^71}╯')

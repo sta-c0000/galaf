@@ -1,0 +1,88 @@
+{
+    "config": {
+        "gid_range": [ 30000, 59999 ],
+        "inet": true,
+        "table": "filter",
+        "defaults": {
+            "families": [ 4 ]
+        }
+    },
+    "users": {
+        "_apt": {
+            "domains": [
+                "deb.debian.org",
+                "security.debian.org"
+            ]
+        },
+        "dnsmasq": {
+            "#rule": "using a LAN DNS server",
+            "rule": "ip daddr 192.168.1.1 meta l4proto {tcp, udp} @th,16,16 53"
+        },
+        "sshd": {
+            "#": "no domains, no rules = only define gid/uid for nftables"
+        },
+        "systemd-timesync": {
+            "domains": [ "pool.ntp.org" ],
+            "rule": "udp dport 123"
+        }
+    },
+    "groups": {
+        "firefox-esr": {
+            "execv": [ "/usr/bin/firefox-esr", "…" ],
+            "families": [ 4, 6 ],
+            "#rule": "empty string = no rule = allow all traffic!",
+            "rule": "",
+            "rule6": ""
+        },
+        "firefox-private": {
+            "execv": [ "/usr/bin/firejail", "--private", "/usr/bin/firefox-esr", "…" ],
+            "rule": ""
+        },
+        "my-mail": {
+            "execv": [ "/usr/local/bin/my-mail", "…" ],
+            "domains": [
+                "smtp.myprovider.com",
+                "pop3.myprovider.com",
+                "mail.otherprovider.com"
+            ],
+            "rule": "tcp dport { 465, 587, 993, 995 }"
+        },
+        "thunderbird": {
+            "execv": [ "/usr/bin/thunderbird", "…" ],
+            "#domains": "string instead of array = use other group's domains",
+            "domains": "my-mail",
+            "rule": "tcp dport { 465, 587, 993, 995 }"
+        },
+        "aria2c": {
+            "execv": [
+                "/usr/bin/firejail", "--quiet",
+                "--private=/home/user/aria2c-downloads",
+                "/usr/bin/aria2c", "…"
+            ],
+            "rule": ""
+        },
+        "example": {
+            "execv": [ "/usr/local/bin/example" ],
+            "domains": [ "www.example.com" ],
+            "rule": "tcp dport 443"
+        },
+        "ping": {
+            "execv": [ "/usr/bin/ping", "…" ],
+            "rule": "icmp type echo-request"
+        },
+        "traceroute": {
+            "#execv": "see notes in README.md",
+            "execv": [ "/usr/bin/traceroute", "-I", "…" ],
+            "rule": "icmp type echo-request"
+        },
+        "NDP6": null,
+        "DHCP4": null,
+        "DHCP6": null,
+        "alarm-in": null,
+        "alarm-out": {
+            "#": "custom user alarm LAN broadcasts",
+            "execv": [ "/usr/local/bin/alarm-send", "…" ],
+            "rule": "ip daddr 192.168.1.255 udp dport 9434"
+        }
+    }
+}
