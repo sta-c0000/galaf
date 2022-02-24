@@ -105,7 +105,7 @@ see in [examples](examples): `galaf.c` and `galaf-test.c`
 
 ## Application connection tracking
 
-Linux kernel's netfilter takes care of connection tracking related inbound and outbound network traffic.  We can attach tag application marks using nftables connection tracking rules.  With an allowlist firewall _everything_ requiring network access needs a firewall rule, therefore we can set the conntrack mark to the application group at the same time we accept new traffic.  Netfilter will take care of tagging all related traffic with our appgroup mark.  Here is an nftables example:
+Linux kernel's netfilter takes care of connection tracking related inbound and outbound network traffic.  We can tag packets with application marks using nftables connection tracking rules.  With an allowlist firewall _everything_ requiring network access needs a firewall rule, therefore we can set the conntrack mark to the application group at the same time we accept new traffic.  Netfilter will take care of tagging all related traffic with our appgroup mark.  Here is an nftables example:
 ```sh
 define thunderbird = 30004 # define the appgroupname gid number (getent group thunderbird)
 (...table)
@@ -222,6 +222,7 @@ nftables can then output these statistics in JSON format which can be processed 
 | username/ping                               |        4  |     336 B |
 | username/traceroute                         |       34  |      2 kB |
 | username/qalc                               |      145  |    8.3 kB |
+| _apt/nogroup                                |    19.1 k |  990.8 kB |
 
 see in [examples](examples): `nftables.conf` and `galaf_stats`
 

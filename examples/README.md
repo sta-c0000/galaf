@@ -105,6 +105,9 @@ Let's say we have this `/usr/local/etc/galaf/galaf.json` entry under groups:
 User can use `galaf` directly (helps with awareness of allowlist firewall):
 ```sh
 galaf ddgr [params ...]
+
+# Could also add galaf bash-completion to rcfile if appgroupnames == commandnames:
+complete -F _command galaf
 ```
 Or, create user galaf aliases (`~/.bash_aliases`),<br>
 Or, create system wide aliases (`/etc/profile.d/galaf_aliases.sh`):
