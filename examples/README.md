@@ -70,7 +70,7 @@ mkdir -p /usr/local/etc/galaf && cp so_mark_giduid.bpf.o /usr/local/etc/galaf/
 # Install systemd service
 mkdir -p /usr/local/lib/systemd/system && cp so_mark_giduid.service /usr/local/lib/systemd/system/
 # Enable service (next/every boot) and start it now
-systemctl enable --now socket_mark_giduid.service
+systemctl enable --now so_mark_giduid.service
 ```
 
 Customize and install `nftables.conf`, and enable nftables service:
