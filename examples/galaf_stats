@@ -30,6 +30,7 @@ if not nftj:
     print('ERROR: `nft list sets` returned nothing (not root or no sets?)')
     exit(1)
 
+# no metainfo with v0.9.0
 if 'metainfo' in nftj[0] and nftj.pop(0)['metainfo']['json_schema_version'] != 1:
     print('WARNING: json_schema_version different than expected.')
 
@@ -37,6 +38,17 @@ for nftset in nftj:
     nftset = nftset['set']
     print(f'╭{"┤ Set: "+nftset["name"]+" ├":─^71}╮')
     set_type = nftset['type']
+    if 'elem' not in nftset:
+        # v0.9.8 and below return elements for all sets
+        # v1.0.1 does not return elements, must list sets individually
+        cmd = f'list set {nftset["family"]} {nftset["table"]} {nftset["name"]}'
+        rc, output, error = nft.cmd(cmd)
+        if rc:
+            print('ERROR: nft.cmd\n' + error)
+            exit(rc)
+        setj = json.loads(output)['nftables']
+        if 'metainfo' in setj[0]: setj.pop(0)
+        nftset = setj[0]['set']
     if 'elem' not in nftset:
         print('  -- empty --\n')
         continue
