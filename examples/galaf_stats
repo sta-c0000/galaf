@@ -72,8 +72,14 @@ for nftset in nftj:
                     if uid == 1:
                         user = 'root|daemon'
                     else:
-                        user = pwd.getpwuid(uid).pw_name
-                    group = grp.getgrgid(gid).gr_name
+                        try:
+                            user = pwd.getpwuid(uid).pw_name
+                        except KeyError:
+                            user = str(uid)
+                    try:
+                        group = grp.getgrgid(gid).gr_name
+                    except KeyError:
+                        group = str(gid)
                     name = f'{user}/{group}'
                 pt, bt = counter['packets'], counter['bytes']
                 print(f'│ {name:45} │{size_in_si(pt):>10} │{size_in_si(bt,True):>10} │')
