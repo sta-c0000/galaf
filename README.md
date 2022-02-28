@@ -165,7 +165,7 @@ table inet mangle {
 ```
 </details>
 
-To accomplish this we can create a very simple eBPF program to pack the gid and uid into the socket mark when IP sockets are created.  The socket mark will be transferred to the packet mark, and the packet mark can then be transferred to the conntrack mark using nftables.
+To accomplish this we can create a very simple eBPF program to pack the gid and uid into the socket mark when IP sockets are created.  The socket mark should be transferred to the packet mark, and the packet mark can then be transferred to the conntrack mark using nftables (the socket mark can be copied directly to conntrack using nftables v0.9.1+).
 
 See: `socket_mark_giduid.bpf.c` in the [examples](examples) for information on how to compile, manually load and attach this eBPF program (confirm your cgroup2 root path: `mount | grep cgroup2`).  Also provided is a systemd service file to auto load the eBPF.
 
@@ -176,7 +176,7 @@ Once our eBPF is loaded and attached, an early nftables rule can copy the packet
 table inet mangle {
     chain output {
         type filter hook output priority -150
-        ct mark == 0 ct mark set mark comment "copy packet mark to conntrack mark"
+        ct mark == 0 ct mark set socket mark comment "eBPF socket mark to conntrack mark"
     }
 }
 ```
