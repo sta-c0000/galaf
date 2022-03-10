@@ -61,9 +61,11 @@ for nftset in nftj:
         val_name = 'user / group' if set_type == 'mark' else 'ip addr'
         print(f'│{val_name:^47}│{"packets":^11}│{"bytes":^11}│')
         print(f'├{"":─^47}┼{"":─^11}┼{"":─^11}┤')
+        pt_tot = bt_tot = 0
 
-        if set_type == 'mark':
-            for mark, counter in val_counters:
+        for val, counter in val_counters:
+            if set_type == 'mark':
+                mark = val
                 uid = mark & 0xFFFF
                 gid = mark>>16
                 if mark == 0:
@@ -81,13 +83,15 @@ for nftset in nftj:
                     except KeyError:
                         group = str(gid)
                     name = f'{user}/{group}'
-                pt, bt = counter['packets'], counter['bytes']
-                print(f'│ {name:45} │{size_in_si(pt):>10} │{size_in_si(bt,True):>10} │')
+            else:
+                name = val
+            pt, bt = counter['packets'], counter['bytes']
+            pt_tot += pt
+            bt_tot += bt
+            print(f'│ {name:45} │{size_in_si(pt):>10} │{size_in_si(bt,True):>10} │')
 
-        if set_type == 'ipv4_addr' or set_type == 'ipv6_addr':
-            for ipaddr, counter in val_counters:
-                pt, bt = counter['packets'], counter['bytes']
-                print(f'│ {ipaddr:45} │{size_in_si(pt):>10} │{size_in_si(bt,True):>10} │')
+        print(f'╞{"":═^47}╪{"":═^11}╪{"":═^11}╡')
+        print(f'│ {"Total":>45} │{size_in_si(pt_tot):>10} │{size_in_si(bt_tot,True):>10} │')
     else:
         print(nftset['elem'])
     print(f'╰{"":─^71}╯')

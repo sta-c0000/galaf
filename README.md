@@ -314,7 +314,7 @@ echo 'Acquire::EnableSrvRecords "false";' > /etc/apt/apt.conf.d/00noSRVqueries
 ```
 - dnsmasq caches DNS queries, and some applications may cache ip addresses from past DNS queries.  So if you change/add set rules, or clear nftables sets, it's very important that you restart dnsmasq and all applications involved (**reboot** should work ;) to reset all of the caches; otherwise the allowlist rules and/or sets may be out of sync and network access may fail for some applications.
 
-- dnsmasq also offers the `--connmark-allowlist` option.  You could also use this to refuse DNS queries based on the ct mark, but I really don't see the point without Ubus:  `--connmark-allowlist` does not actually prevent connections, so any app could still connect to any IP address, and use other DNS servers (like vscode does).  Even if you were to limit connections only to port 443 (https), apps could still direct connect to any IP, and even use private or public DoH (DNS over https) servers to resolve all (like firefox can do, and is considering doing by default).
+- dnsmasq also offers the `--connmark-allowlist` option.  You could also use this to refuse DNS queries based on the ct mark, but I really don't see the point without Ubus:  `--connmark-allowlist` does not actually prevent connections, so any app could still connect to any IP address, and use other DNS servers (like vscode does).  Even if you were to limit connections only to port 443 (https), apps could still direct connect to any IP, and even use private or public DoH (DNS over https) servers to resolve all (as Firefox does by default now).
 
 ## Config file and Generator tool
 
