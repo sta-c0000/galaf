@@ -87,12 +87,15 @@ def process_ugr(type_id, name, ugid, params):
 
     if domains:
         if isinstance(domains, list):
-            nftset = 'nftset=/' + '/'.join(domains)
+            i = len(nftsets)
+            for domain in domains:
+                domain_nftsets.setdefault(domain, set()).add(i)
+            nftset = ''
             if 4 in families:
-                nftset += f'/4#{"inet" if inet else "ip"}#{table}#{name}_4'
+                nftset += f'4#{"inet" if inet else "ip"}#{table}#{name}_4'
                 define_sets.append(f'\tset {name}_4 {{ type ipv4_addr; }}')
             if 6 in families:
-                nftset += f'/6#{"inet" if inet else "ip6"}#{table}#{name}_6'
+                nftset += f'{nftset and ","}6#{"inet" if inet else "ip6"}#{table}#{name}_6'
                 to_set = define_sets if inet else define6_sets
                 to_set.append(f'\tset {name}_6 {{ type ipv6_addr; }}')
             nftsets.append(nftset)
@@ -209,6 +212,7 @@ if __name__ == '__main__':
     rules = []
     rule6s = []
     nftsets = []
+    domain_nftsets = {}
 
     galaf_users = gcj.get('users', None)
     if galaf_users:
@@ -241,6 +245,12 @@ if __name__ == '__main__':
     write_list(rule6s,       os_path.join(args.nftincpath, 'rule6s.conf'))
 
     # dnsmasq
-    write_list(nftsets,      args.nftsets)
+    # consolidate domains sharing same nftsets
+    nftsets_domains = {}
+    for domain,sets in domain_nftsets.items():
+        setcoll = ','.join(nftsets[i] for i in sets)
+        nftsets_domains.setdefault(setcoll, set()).add(domain)
+    dnsets = ['nftset=/'+'/'.join(d)+'/'+ s for s,d in nftsets_domains.items()]
+    write_list(dnsets,       args.nftsets)
 
     print('Done.')
