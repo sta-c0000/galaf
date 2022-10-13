@@ -31,7 +31,7 @@ except ValueError:
     gid_min, gid_max = 30000, 59999 # our application group range
     try:
         gid = grp.getgrnam(name).gr_gid
-        if not gid_min < gid < gid_max:
+        if not gid_min <= gid <= gid_max:
             raise KeyError
     except KeyError:
         gid = None
